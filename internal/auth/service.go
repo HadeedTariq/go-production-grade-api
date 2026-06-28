@@ -8,9 +8,11 @@ import (
 
 	repo "github.com/HadeedTariq/go-production-grade-api/internal/adapters/postgresql/sqlc"
 	authDto "github.com/HadeedTariq/go-production-grade-api/internal/auth/dto"
+	"github.com/HadeedTariq/go-production-grade-api/internal/utils"
 	"github.com/HadeedTariq/go-production-grade-api/internal/utils/env"
 	"github.com/golang-jwt/jwt/v5"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -35,10 +37,6 @@ func (s *svc) RegisterUser(ctx context.Context, data authDto.SignupRequest) (str
 
 	if err == nil {
 		return "", errors.New("User Already exist")
-	}
-
-	if err != nil {
-		return "", err
 	}
 
 	tokenData := DataStoredInToken{
@@ -66,4 +64,56 @@ func (s *svc) RegisterUser(ctx context.Context, data authDto.SignupRequest) (str
 
 	magicLink := fmt.Sprintf("%s/auth/register?token=%s", env.GetEnvString("SERVER_DOMAIN", "http://localhost:3000"), encryptedToken)
 
+	// ~ so over there have to integrate the password hashing logic
+	hashedPassword, err := utils.HashPassword(data.Password)
+
+	if err != nil {
+		return "", err
+	}
+
+	tx, err := s.db.Begin(ctx)
+
+	if err != nil {
+		return "", err
+	}
+	defer tx.Rollback(ctx)
+
+	qtx := s.repo.WithTx(tx)
+
+	_, err = qtx.CreateMagicLink(ctx, repo.CreateMagicLinkParams{
+		Email: data.Email,
+		Token: encryptedToken,
+	})
+
+	if err != nil {
+		return "", err
+	}
+	_, err = qtx.CreateUser(ctx, repo.CreateUserParams{
+		Name:     data.Name,
+		Username: data.Username,
+		Email:    data.Email,
+		Profession: pgtype.Text{
+			String: data.Profession,
+			Valid:  true,
+		},
+		UserPassword: pgtype.Text{
+			String: hashedPassword,
+			Valid:  true,
+		},
+	})
+
+	if err != nil {
+		return "", err
+	}
+
+	// ~ so over there now have to integrate the verfication email sending functionality
+	emailResponse := utils.SendVerificationEmail(data.Email, magicLink)
+
+	if emailResponse.Success == false {
+		return "", emailResponse.Error
+	}
+
+	tx.Commit(ctx)
+
+	return "Verification email sent", nil
 }

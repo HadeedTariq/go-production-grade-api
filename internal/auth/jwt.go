@@ -8,9 +8,9 @@ import (
 )
 
 var (
-	JWT_SECRET               = env.GetEnvString("JWT_SECRET", "hadeed@13")
-	JWT_ACCESS_TOKEN_SECRET  = env.GetEnvString("JWT_REFRESH_TOKEN_SECRET", "hadeed@13")
-	JWT_REFRESH_TOKEN_SECRET = env.GetEnvString("JWT_REFRESH_TOKEN_SECRET", "hadeed@13")
+	JWT_SECRET               = []byte(env.GetEnvString("JWT_SECRET", "hadeed@13"))
+	JWT_ACCESS_TOKEN_SECRET  = []byte(env.GetEnvString("JWT_REFRESH_TOKEN_SECRET", "hadeed@13"))
+	JWT_REFRESH_TOKEN_SECRET = []byte(env.GetEnvString("JWT_REFRESH_TOKEN_SECRET", "hadeed@13"))
 )
 
 func GenerateToken(data DataStoredInToken) (string, error) {

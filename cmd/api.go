@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"time"
 
+	repo "github.com/HadeedTariq/go-production-grade-api/internal/adapters/postgresql/sqlc"
+	"github.com/HadeedTariq/go-production-grade-api/internal/auth"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -36,6 +38,11 @@ func (app *application) mount() http.Handler {
 
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("all good"))
+	})
+	r.Route("/auth", func(authRoute chi.Router) {
+		authService := auth.NewService(repo.New(app.db), app.db)
+		authHandler := auth.NewHandler(authService)
+		authRoute.Post("/register", authHandler.RegisterUser)
 	})
 
 	return r

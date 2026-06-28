@@ -27,7 +27,6 @@ func (h *handler) RegisterUser(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
-	// ~ so over there not any error occur over there
 	msg, err := h.service.RegisterUser(r.Context(), req)
 
 	if err != nil {

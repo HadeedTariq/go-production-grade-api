@@ -7,9 +7,9 @@ type Response struct {
 }
 
 type DataStoredInToken struct {
-	Name       string
-	Username   string
-	Email      string
-	Profession string
+	Name       string `json:"name"`
+	Username   string `json:"username"`
+	Email      string `json:"email"`
+	Profession string `json:"profession"`
 	jwt.RegisteredClaims
 }
