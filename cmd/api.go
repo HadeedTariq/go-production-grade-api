@@ -43,6 +43,7 @@ func (app *application) mount() http.Handler {
 		authService := auth.NewService(repo.New(app.db), app.db)
 		authHandler := auth.NewHandler(authService)
 		authRoute.Post("/register", authHandler.RegisterUser)
+		authRoute.Get("/verification", authHandler.VerifyUser)
 	})
 
 	return r

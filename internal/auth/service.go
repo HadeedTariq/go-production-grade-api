@@ -19,6 +19,7 @@ import (
 // ~ so according to me all the lower level stuff of the controller is managed with in the service
 type Service interface {
 	RegisterUser(ctx context.Context, data authDto.SignupRequest) (message string, err error)
+	VerifyUser(ctx context.Context, token string) (message string, err error)
 }
 type svc struct {
 	repo *repo.Queries
@@ -62,7 +63,7 @@ func (s *svc) RegisterUser(ctx context.Context, data authDto.SignupRequest) (str
 		return "", err
 	}
 
-	magicLink := fmt.Sprintf("%s/auth/register?token=%s", env.GetEnvString("SERVER_DOMAIN", "http://localhost:3000"), encryptedToken)
+	magicLink := fmt.Sprintf("%s/auth/verification?token=%s", env.GetEnvString("SERVER_DOMAIN", "http://localhost:3000"), encryptedToken)
 
 	// ~ so over there have to integrate the password hashing logic
 	hashedPassword, err := utils.HashPassword(data.Password)
@@ -107,13 +108,78 @@ func (s *svc) RegisterUser(ctx context.Context, data authDto.SignupRequest) (str
 	}
 
 	// ~ so over there now have to integrate the verfication email sending functionality
-	emailResponse := utils.SendVerificationEmail(data.Email, magicLink)
-
-	if emailResponse.Success == false {
-		return "", emailResponse.Error
-	}
+	go utils.SendVerificationEmail(data.Email, magicLink)
 
 	tx.Commit(ctx)
 
 	return "Verification email sent", nil
+}
+
+func (s *svc) VerifyUser(ctx context.Context, token string) (string, error) {
+	email, err := s.repo.FindMagicLinkByToken(ctx, token)
+	if err != nil {
+		return "", errors.New("invalid token")
+	}
+
+	decryptedToken, err := DecryptToken(token)
+	if err != nil {
+		return "", err
+	}
+
+	claims, err := ValidateToken(decryptedToken)
+	if err != nil {
+		return "", err
+	}
+
+	if claims.Email != email {
+		return "", errors.New("incorrect token")
+	}
+
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer tx.Rollback(ctx)
+
+	qtx := s.repo.WithTx(tx)
+
+	user, err := qtx.VerifyUserByEmail(ctx, repo.VerifyUserByEmailParams{
+		IsVerified: true,
+		Email:      email,
+	})
+
+	if err != nil {
+		return "", err
+	}
+
+	err = qtx.DeleteMagicLinksByEmail(ctx, claims.Email)
+	if err != nil {
+		return "", err
+	}
+
+	_, err = qtx.CreateAbout(ctx, user.ID)
+	if err != nil {
+		return "", err
+	}
+
+	_, err = qtx.CreateSocialLinks(ctx, user.ID)
+	if err != nil {
+		return "", err
+	}
+
+	_, err = qtx.CreateUserStats(ctx, user.ID)
+	if err != nil {
+		return "", err
+	}
+
+	_, err = qtx.CreateStreak(ctx, user.ID)
+	if err != nil {
+		return "", err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return "", err
+	}
+
+	return "User registered successfully", nil
 }
