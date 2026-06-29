@@ -44,6 +44,9 @@ func (app *application) mount() http.Handler {
 		authHandler := auth.NewHandler(authService)
 		authRoute.Post("/register", authHandler.RegisterUser)
 		authRoute.Get("/verification", authHandler.VerifyUser)
+		authRoute.Post("/login", authHandler.LoginUser)
+		// authRoute.Use(middlewares.CheckAuth)
+
 	})
 
 	return r

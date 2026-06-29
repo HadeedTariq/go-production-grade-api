@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	middlewares "github.com/HadeedTariq/go-production-grade-api/internal"
 	repo "github.com/HadeedTariq/go-production-grade-api/internal/adapters/postgresql/sqlc"
 	authDto "github.com/HadeedTariq/go-production-grade-api/internal/auth/dto"
 	"github.com/HadeedTariq/go-production-grade-api/internal/utils"
@@ -20,6 +21,8 @@ import (
 type Service interface {
 	RegisterUser(ctx context.Context, data authDto.SignupRequest) (message string, err error)
 	VerifyUser(ctx context.Context, token string) (message string, err error)
+	LoginUser(ctx context.Context, data authDto.SigninRequest) (token TokenResponse, err error)
+	AuthenticateUser(ctx context.Context) (user *AccessTokenClaims, err error)
 }
 type svc struct {
 	repo *repo.Queries
@@ -45,6 +48,8 @@ func (s *svc) RegisterUser(ctx context.Context, data authDto.SignupRequest) (str
 		Username:   data.Username,
 		Email:      data.Email,
 		Profession: data.Profession,
+		Id:         1,
+		Avatar:     "",
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -182,4 +187,47 @@ func (s *svc) VerifyUser(ctx context.Context, token string) (string, error) {
 	}
 
 	return "User registered successfully", nil
+}
+
+func (s *svc) LoginUser(ctx context.Context, data authDto.SigninRequest) (token TokenResponse, err error) {
+	user, err := s.repo.FindUserByEmail(ctx, data.Email)
+	if err != nil {
+		return TokenResponse{}, err
+	}
+
+	isPasswordCorrect := utils.CheckPasswordHash(data.Password, user.UserPassword.String)
+	if !isPasswordCorrect {
+		return TokenResponse{}, errors.New("incorrect credentials")
+	}
+
+	tokenResp, err := GenerateAccessAndRefreshToken(DataStoredInToken{
+		Id:         user.ID,
+		Name:       user.Name,
+		Username:   user.Username,
+		Email:      user.Email,
+		Profession: user.Profession.String,
+		Avatar:     user.Avatar.String,
+	})
+	if err != nil {
+		return TokenResponse{}, err
+	}
+
+	err = s.repo.UpdateRefreshToken(ctx, repo.UpdateRefreshTokenParams{
+		RefreshToken: pgtype.Text{
+			String: tokenResp.RefreshToken,
+			Valid:  true,
+		},
+		Email: user.Email,
+	})
+
+	if err != nil {
+		return TokenResponse{}, err
+	}
+
+	return tokenResp, nil
+}
+
+func (s *svc) AuthenticateUser(ctx context.Context) (user *AccessTokenClaims, err error) {
+	user = ctx.Value(middlewares.UserContextKey).(*AccessTokenClaims)
+	return user, nil
 }
