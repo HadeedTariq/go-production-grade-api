@@ -1,11 +1,9 @@
-package middlewares
+package auth
 
 import (
 	"context"
 	"net/http"
 	"strings"
-
-	"github.com/HadeedTariq/go-production-grade-api/internal/auth"
 )
 
 type ContextKey string
@@ -37,7 +35,7 @@ func CheckAuth(next http.Handler) http.Handler {
 			return
 		}
 
-		user, err := auth.ValidateAccessToken(token)
+		user, err := ValidateAccessToken(token)
 
 		if err != nil {
 			http.Error(w, "Invalid or expired access token", http.StatusUnauthorized)

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	middlewares "github.com/HadeedTariq/go-production-grade-api/internal"
 	repo "github.com/HadeedTariq/go-production-grade-api/internal/adapters/postgresql/sqlc"
 	authDto "github.com/HadeedTariq/go-production-grade-api/internal/auth/dto"
 	"github.com/HadeedTariq/go-production-grade-api/internal/utils"
@@ -23,6 +22,7 @@ type Service interface {
 	VerifyUser(ctx context.Context, token string) (message string, err error)
 	LoginUser(ctx context.Context, data authDto.SigninRequest) (token TokenResponse, err error)
 	AuthenticateUser(ctx context.Context) (user *AccessTokenClaims, err error)
+	LogoutUser(ctx context.Context) (message string, err error)
 }
 type svc struct {
 	repo *repo.Queries
@@ -228,6 +228,24 @@ func (s *svc) LoginUser(ctx context.Context, data authDto.SigninRequest) (token 
 }
 
 func (s *svc) AuthenticateUser(ctx context.Context) (user *AccessTokenClaims, err error) {
-	user = ctx.Value(middlewares.UserContextKey).(*AccessTokenClaims)
+	user = ctx.Value(UserContextKey).(*AccessTokenClaims)
 	return user, nil
+}
+func (s *svc) LogoutUser(ctx context.Context) (message string, err error) {
+	user := ctx.Value(UserContextKey).(*AccessTokenClaims)
+
+	err = s.repo.UpdateRefreshToken(ctx, repo.UpdateRefreshTokenParams{
+		RefreshToken: pgtype.Text{
+			String: "",
+			Valid:  true,
+		},
+		Email: user.Email,
+	})
+
+	if err != nil {
+		return "", err
+	}
+
+	return "User logged out successfully", nil
+
 }

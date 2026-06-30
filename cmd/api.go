@@ -45,8 +45,8 @@ func (app *application) mount() http.Handler {
 		authRoute.Post("/register", authHandler.RegisterUser)
 		authRoute.Get("/verification", authHandler.VerifyUser)
 		authRoute.Post("/login", authHandler.LoginUser)
-		// authRoute.Use(middlewares.CheckAuth)
-
+		authRoute.With(auth.CheckAuth).Get("/", authHandler.AuthenticateUser)
+		authRoute.With(auth.CheckAuth).Post("/logout", authHandler.LogoutUser)
 	})
 
 	return r
