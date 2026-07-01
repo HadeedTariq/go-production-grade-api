@@ -47,6 +47,9 @@ func (app *application) mount() http.Handler {
 		authRoute.Post("/login", authHandler.LoginUser)
 		authRoute.With(auth.CheckAuth).Get("/", authHandler.AuthenticateUser)
 		authRoute.With(auth.CheckAuth).Post("/logout", authHandler.LogoutUser)
+		authRoute.With(auth.CheckAuth).Post("/logout", authHandler.LogoutUser)
+		authRoute.Get("/github", authHandler.GitHubLogin)
+		authRoute.Get("/github/callback", authHandler.GithubCallback)
 	})
 
 	return r

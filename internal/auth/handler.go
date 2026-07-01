@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"net/http"
 	"time"
 
@@ -161,5 +162,77 @@ func (h *handler) LogoutUser(w http.ResponseWriter, r *http.Request) {
 
 	json.Write(w, 200, Response{
 		Message: msg,
+	})
+}
+
+func (h *handler) GitHubLogin(w http.ResponseWriter, r *http.Request) {
+	state, err := GenerateState()
+	if err != nil {
+		json.Write(w, http.StatusInternalServerError, Response{Message: err.Error()})
+		return
+	}
+
+	session, err := Store.Get(r, SessionName)
+
+	if err != nil {
+		json.Write(w, http.StatusInternalServerError, Response{Message: err.Error()})
+		return
+	}
+
+	session.Values["oauth_state"] = state
+	err = session.Save(r, w)
+	if err != nil {
+		json.Write(w, http.StatusInternalServerError, Response{Message: err.Error()})
+		return
+	}
+
+	url := githubOauthConfig.AuthCodeURL(state)
+	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
+}
+
+func (h *handler) GithubCallback(w http.ResponseWriter, r *http.Request) {
+	session, err := Store.Get(r, SessionName)
+
+	if err != nil {
+		json.Write(w, http.StatusBadRequest, Response{Message: err.Error()})
+		return
+	}
+
+	storedState, ok := session.Values["oauth_state"].(string)
+	if !ok {
+		json.Write(w, http.StatusBadRequest, Response{Message: "Missing oauth state"})
+		return
+	}
+
+	returnedState := r.URL.Query().Get("state")
+
+	if returnedState != storedState {
+		json.Write(w, http.StatusBadRequest, Response{Message: "Invalid state"})
+		return
+	}
+
+	code := r.URL.Query().Get("code")
+
+	token, err := githubOauthConfig.Exchange(
+		context.Background(),
+		code,
+	)
+
+	if err != nil {
+		json.Write(w, http.StatusBadRequest, Response{Message: err.Error()})
+		return
+	}
+	session.Values["oauth_state"] = nil
+
+	err = session.Save(r, w)
+	if err != nil {
+		json.Write(w, http.StatusBadRequest, Response{Message: err.Error()})
+		return
+	}
+
+	_ = token
+
+	json.Write(w, 200, Response{
+		Message: "Login through OAuth successfully",
 	})
 }
